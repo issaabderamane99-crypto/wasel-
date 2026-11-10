@@ -1,5 +1,5 @@
 // Wasel service worker: cache the app shell so it opens offline.
-const CACHE = 'wasel-v4';
+const CACHE = 'wasel-v5';
 const SHELL = ['./', 'index.html', 'styles.css', 'app.js', 'manifest.json', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png'];
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', (e) => {

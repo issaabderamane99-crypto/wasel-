@@ -68,6 +68,10 @@
       nStarted: 'انطلقت الحافلة {num} في رحلة الذهاب', nNear: 'الحافلة على بعد {n} دقائق من محطتك', nAtStop: 'الحافلة وصلت محطتك',
       nBoarded: 'تم تسجيل صعودك الحافلة', nArrived: 'وصلتِ الحرم الجامعي بسلام', nAbsent: 'تم تسجيل غيابك اليوم', nSkipped: 'غادرت الحافلة محطتك',
       nPaid: 'تم تسجيل دفعة {v} لاشتراكك',
+      tripDuration: 'مدة الرحلة', remainingTime: 'المتبقي', etaArrive: 'الوصول المتوقع', totalDuration: 'مدة الرحلة الكلية: {d}', estDuration: 'المدة المتوقعة ≈ {n} دقيقة', minShort: 'د',
+      navigate: '🧭 افتح الطريق', navGoogle: 'خرائط Google', navWaze: 'Waze', fullRoute: '🗺️ عرض الطريق كاملاً', address: 'العنوان', theRoute: 'الطريق',
+      locSettings: 'إعدادات الموقع', city: 'المدينة', campusName: 'اسم الجامعة / الحرم', locHint: 'تُستخدم لفتح الطريق في الخرائط', navTo: 'الطريق إلى: {p}',
+      driverLink: 'رابط السائق', copied: 'تم نسخ الرابط', copyLink: 'نسخ رابط السائق',
       resetDone: 'تمت إعادة ضبط البيانات', installDone: 'تم تثبيت التطبيق', noSub: 'لا يوجد اشتراك لهذا الشهر',
     },
     en: {
@@ -131,6 +135,10 @@
       nStarted: 'Bus {num} has started the morning trip', nNear: 'The bus is {n} min from your stop', nAtStop: 'The bus is at your stop',
       nBoarded: 'Your boarding was recorded', nArrived: 'You arrived safely at campus', nAbsent: "You're marked absent today", nSkipped: 'The bus left your stop',
       nPaid: 'A {v} payment was recorded for your subscription',
+      tripDuration: 'Trip time', remainingTime: 'Remaining', etaArrive: 'Expected arrival', totalDuration: 'Total trip time: {d}', estDuration: 'Expected duration ≈ {n} min', minShort: 'min',
+      navigate: '🧭 Open route', navGoogle: 'Google Maps', navWaze: 'Waze', fullRoute: '🗺️ Show full route', address: 'Address', theRoute: 'Route',
+      locSettings: 'Location settings', city: 'City', campusName: 'University / campus name', locHint: 'Used to open directions in maps apps', navTo: 'Directions to: {p}',
+      driverLink: 'Driver link', copied: 'Link copied', copyLink: 'Copy driver link',
       resetDone: 'Demo data reset', installDone: 'App installed', noSub: 'No subscription this month',
     },
   };
@@ -252,7 +260,7 @@
       subs.push({ id: 'sub-' + st.id + '-1', sid: st.id, month: m1, amount: st.fee, payments: b ? [P(-34, b, 'transfer')] : [] });
       subs.push({ id: 'sub-' + st.id + '-0', sid: st.id, month: m0, amount: st.fee, payments: a ? [P(-((Number(st.id.slice(2)) % 8) + 1), a)] : [] });
     }
-    const s = { v: 4, day: t0, students, drivers, buses, subs, trips: [], notifs: {}, absent: {}, auto: true, seq: 200 };
+    const s = { v: 4, day: t0, settings: { city: { ar: 'بريدة', en: 'Buraydah' }, campus: { ar: 'جامعة القصيم', en: 'Qassim University' } }, students, drivers, buses, subs, trips: [], notifs: {}, absent: {}, auto: true, seq: 200 };
     const times = { r1: [400, 850], r2: [420, 870], r3: [390, 900] };
     for (const rid of Object.keys(ROUTES)) {
       s.trips.push(newTrip(rid, 'am', times[rid][0], 't-' + rid + '-am'));
@@ -273,9 +281,13 @@
   let saveTimer = null;
   const persist = () => { clearTimeout(saveTimer); saveTimer = setTimeout(() => store.set(STATE_KEY, JSON.stringify(S)), 250); };
   S = loadState();
+  S.settings = S.settings || { city: { ar: 'بريدة', en: 'Buraydah' }, campus: { ar: 'جامعة القصيم', en: 'Qassim University' } };
 
+  const HASH_ROLE = { owner: 'admin', driver: 'driver', student: 'student' };
+  const ROLE_HASH = { admin: 'owner', driver: 'driver', student: 'student' };
+  const roleFromHash = () => HASH_ROLE[location.hash.replace('#', '')] || null;
   const UI = {
-    role: ['admin', 'driver', 'student'].includes(store.get('wasel-role')) ? store.get('wasel-role') : 'admin',
+    role: roleFromHash() || (['admin', 'driver', 'student'].includes(store.get('wasel-role')) ? store.get('wasel-role') : 'admin'),
     adminTab: 'dash', driver: 'd1', student: 'st4', tripFilter: 'all', subMonth: monthKey(0), query: '',
   };
 
@@ -331,6 +343,25 @@
     if (tr.atStop) sec += Math.max(0, tr.dwell);
     for (let i = tr.atStop ? tr.next + 1 : tr.next; i < stop && i < n; i++) if (waitingAt(tr, i).length) sec += DWELL;
     return sec;
+  }
+  const durStr = (demoSec) => { const real = Math.max(0, Math.round(demoSec * SCALE)); const h = Math.floor(real / 3600); const m = Math.floor((real % 3600) / 60); const sec = real % 60; return (h ? h + ':' + String(m).padStart(2, '0') : String(m).padStart(2, '0')) + ':' + String(sec).padStart(2, '0'); };
+  const fullTripSec = (rid) => GEO[rid].total / SPEED + ROUTES[rid].stops.length * DWELL;
+  // ---- navigation links (open the phone's maps app)
+  const stopAddr = (rid, i, lg = 'ar') => `${ROUTES[rid].stops[i][lg]}، ${S.settings.city[lg] || S.settings.city.ar}`.replace('، ', lg === 'ar' ? '، ' : ', ');
+  const campusAddr = (lg = 'ar') => `${S.settings.campus[lg] || S.settings.campus.ar}، ${S.settings.city[lg] || S.settings.city.ar}`.replace('، ', lg === 'ar' ? '، ' : ', ');
+  const gmaps = (dest, origin, waypoints) => 'https://www.google.com/maps/dir/?api=1&travelmode=driving&destination=' + encodeURIComponent(dest)
+    + (origin ? '&origin=' + encodeURIComponent(origin) : '') + (waypoints && waypoints.length ? '&waypoints=' + encodeURIComponent(waypoints.join('|')) : '');
+  const waze = (dest) => 'https://waze.com/ul?navigate=yes&q=' + encodeURIComponent(dest);
+  const fullRouteUrl = (rid, from = 0) => {
+    const pts = ROUTES[rid].stops.map((_, i) => stopAddr(rid, i)).slice(from);
+    return gmaps(campusAddr(), pts.length ? undefined : undefined, pts);
+  };
+  function navButtons(dest, label) {
+    return `<div class="small muted" style="margin-top:10px">📍 ${esc(label)}</div>
+      <div class="row" style="margin-top:8px;gap:8px">
+        <a class="btn accent grow" href="${esc(gmaps(dest))}" target="_blank" rel="noopener">${esc(t('navigate'))} · ${esc(t('navGoogle'))}</a>
+        <a class="btn ghost" href="${esc(waze(dest))}" target="_blank" rel="noopener">${esc(t('navWaze'))}</a>
+      </div>`;
   }
   const toMin = (sec) => Math.max(1, Math.round((sec || 0) * SCALE / 60));
   function step(tr, dt) {
@@ -447,7 +478,7 @@
     const anySched = Object.keys(ROUTES).some((rid) => { const tr = liveTrip(rid); return tr && tr.status === 'scheduled' && busOfRoute(rid); });
     return `${live('kpis')}
       <div class="card"><div class="row between wrap"><div class="grow"><h3>${esc(t('simTitle'))}</h3><p class="muted small">${esc(t('simHint'))}</p></div>
-        <div class="row"><button class="btn accent" data-act="start-all" ${anySched ? '' : 'disabled'}>${esc(t('startAll'))}</button><button class="btn ghost" data-act="reset">${esc(t('resetDemo'))}</button></div></div></div>
+        <div class="row wrap"><button class="btn accent" data-act="start-all" ${anySched ? '' : 'disabled'}>${esc(t('startAll'))}</button><button class="btn ghost" data-act="copy-driver">🔗 ${esc(t('copyLink'))}</button><button class="btn ghost" data-act="reset">${esc(t('resetDemo'))}</button></div></div></div>
       <div class="grid two">
         <div class="card">${sectionHead(t('liveMap'))}${mapBlock({ routes: Object.keys(ROUTES) })}</div>
         <div class="card">${sectionHead(t('liveTrips'), `<button class="btn ghost sm" data-act="atab" data-tab="trips">${esc(t('seeAll'))}</button>`)}${live('tripProgress')}</div>
@@ -486,7 +517,7 @@
       const r = ROUTES[tr.route]; const b = tripBus(tr); const d = b && driverById(b.driver);
       const nxt = tr.status === 'active' ? (tr.next < r.stops.length ? L(r.stops[tr.next]) : t('campus')) : '';
       return `<li><div class="row between"><div class="row"><b class="num">${clockStr(tr.start)}</b><span class="small">${esc(L(r.name))} · ${esc(t(tr.dir))}</span></div>${statusBadge(tr)}</div>
-        ${tr.status !== 'scheduled' ? `<div class="progress" style="margin:8px 0 4px"><i style="width:${progressPct(tr)}%;background:${r.color}"></i></div><div class="row between small muted"><span>${esc(t('paxSummary', paxCounts(tr)))}</span><span class="num">${tr.status === 'active' ? `${esc(t('driving'))} ${esc(nxt)}` : clockStr(tr.endedAt)}</span></div>`
+        ${tr.status !== 'scheduled' ? `<div class="progress" style="margin:8px 0 4px"><i style="width:${progressPct(tr)}%;background:${r.color}"></i></div><div class="row between small muted"><span>${esc(t('paxSummary', paxCounts(tr)))}</span><span class="num">${tr.status === 'active' ? `${esc(t('driving'))} ${esc(nxt)} · ⏱ ${durStr(tr.elapsed)}` : `${clockStr(tr.endedAt)} · ⏱ ${durStr(tr.elapsed)}`}</span></div>`
           : `<div class="small muted">${b ? `${esc(t('bus'))} ${esc(b.num)} · ${esc(d ? L(d.name) : t('none'))}` : esc(t('noBusForRoute'))}</div>`}</li>`;
     }).join('')}</ul>`;
   };
@@ -539,7 +570,11 @@
   }
 
   // ---- routes
-  LIVE.routes = () => Object.entries(ROUTES).map(([rid, r]) => {
+  LIVE.routes = () => `<div class="card"><div class="card-h"><h2>📍 ${esc(t('locSettings'))}</h2></div><p class="small muted" style="margin:-6px 0 12px">${esc(t('locHint'))}</p>
+      <form data-form="loc"><div class="row wrap" style="gap:8px">
+        <label class="field grow"><span>${esc(t('city'))}</span><input class="input" name="city" value="${esc(S.settings.city.ar)}"></label>
+        <label class="field grow"><span>${esc(t('campusName'))}</span><input class="input" name="campus" value="${esc(S.settings.campus.ar)}"></label>
+      </div><button class="btn sm" type="submit">${esc(t('save'))}</button></form></div>` + Object.entries(ROUTES).map(([rid, r]) => {
     const b = busOfRoute(rid); const d = b && driverById(b.driver);
     const trips = S.trips.filter((x) => x.route === rid).sort((a, c) => a.start - c.start);
     const n = S.students.filter((x) => x.route === rid).length;
@@ -553,6 +588,7 @@
           <div class="row between"><span class="muted">${esc(t('driver'))}</span><b>${esc(d ? L(d.name) : t('none'))}</b></div>
           <div class="row between"><span class="muted">${esc(t('tripsToday'))}</span><b class="num">${trips.map((x) => `${clockStr(x.start)} ${esc(t(x.dir))}`).join(' · ') || '—'}</b></div>
           <ol class="timeline" style="margin-top:10px">${r.stops.map((s, i) => `<li><span class="dot"></span><div class="row between"><b>${esc(L(s))}</b><span class="muted">${esc(t('studentsN', { n: studentsAt(rid, i).length }))}</span></div></li>`).join('')}<li><span class="dot"></span><b>${esc(t('campus'))}</b></li></ol>
+          <a class="btn soft block" href="${esc(fullRouteUrl(rid))}" target="_blank" rel="noopener">${esc(t('fullRoute'))}</a>
         </div>
       </div></div>`;
   }).join('');
@@ -766,28 +802,40 @@
         <div style="text-align:end"><div class="clock">${clockStr(tr.status === 'scheduled' ? tr.start : tr.status === 'completed' ? tr.endedAt : tripTime(tr))}</div>${statusBadge(tr)}</div></div>
       <div class="row between small" style="margin-top:12px"><span class="muted">${esc(t('tripAm'))} · ${esc(L(r.name))}</span><span>${esc(t('onboard'))}: <b class="num">${c.b} / ${b.cap}</b></span></div></div>`;
     if (tr.status === 'scheduled') {
-      h += `<div class="card"><p class="muted" style="margin-bottom:12px">${esc(t('notStarted', { t: clockStr(tr.start) }))}</p><button class="btn accent lg" data-act="start-trip" data-trip="${tr.id}">${esc(t('startTrip'))}</button></div>`;
+      h += `<div class="card"><p class="muted">${esc(t('notStarted', { t: clockStr(tr.start) }))}</p><p class="small muted" style="margin:4px 0 14px">⏱ ${esc(t('estDuration', { n: toMin(fullTripSec(tr.route)) }))}</p><button class="btn accent lg" style="padding:20px;font-size:1.25rem" data-act="start-trip" data-trip="${tr.id}">${esc(t('startTrip'))}</button></div>
+        <div class="card"><div class="card-h"><h3>🗺️ ${esc(t('theRoute'))}</h3></div>${mapBlock({ routes: [tr.route] })}
+          <a class="btn soft block" style="margin-top:12px" href="${esc(fullRouteUrl(tr.route))}" target="_blank" rel="noopener">${esc(t('fullRoute'))}</a>
+          ${navButtons(stopAddr(tr.route, 0), (lang === 'ar' ? stopAddr(tr.route, 0) : stopAddr(tr.route, 0, 'en')))}</div>`;
     } else if (tr.status === 'active') {
       const toCampus = tr.next >= r.stops.length;
       const here = !toCampus ? studentsAt(tr.route, tr.next).filter((x) => tr.pax[x.id]) : [];
+      const remain = etaSec(tr, r.stops.length) || 0;
+      h += `<div class="hero"><div class="row between" style="align-items:flex-end">
+          <div><div class="small muted">⏱ ${esc(t('tripDuration'))}</div><div class="eta">${durStr(tr.elapsed)}</div></div>
+          <div style="text-align:end"><div class="small muted">${esc(t('remainingTime'))}</div><b class="num" style="font-size:1.3rem">≈ ${toMin(remain)} ${esc(t('minShort'))}</b>
+            <div class="small muted num">${esc(t('etaArrive'))} ${clockStr(tripTime(tr) + remain * SCALE / 60)}</div></div></div>
+        <div class="progress" style="margin-top:14px"><i style="width:${progressPct(tr)}%"></i></div></div>`;
       h += `<div class="card stop-card"><div class="small muted">${esc(t(tr.atStop ? 'currentStop' : 'nextStop'))}</div>
         <div class="big-title">${esc(toCampus ? t('toCampus') : L(r.stops[tr.next]))}</div>
         ${!toCampus && !tr.atStop ? `<div class="small muted num">≈ ${toMin(etaSec(tr, tr.next))} ${esc(t('minutes'))}</div>` : ''}
+        ${toCampus ? navButtons(campusAddr(), lang === 'ar' ? campusAddr() : campusAddr('en')) : navButtons(stopAddr(tr.route, tr.next), lang === 'ar' ? stopAddr(tr.route, tr.next) : stopAddr(tr.route, tr.next, 'en'))}
         ${here.length ? `<div class="sec-title" style="margin-top:12px">${esc(t('pickHere'))}</div>${here.map((st) => {
           const v = tr.pax[st.id]; const act = tr.atStop && v === 'waiting';
           return `<div class="pax"><div class="avatar">${esc(initials(st.name))}</div><div class="grow"><b>${esc(L(st.name))}</b><div class="small muted">${esc(L(st.college))}</div></div>
             ${act ? `<button class="btn ok sm" data-act="board" data-sid="${st.id}">${esc(t('markBoard'))}</button><button class="btn bad sm" data-act="mark-absent" data-sid="${st.id}">${esc(t('markAbsent'))}</button>`
               : badge(v === 'boarded' ? 'ok' : v === 'waiting' ? 'info' : 'bad', t(v === 'missed' ? 'absent' : v))}</div>`;
         }).join('')}` : ''}</div>
-        <div class="card">${mapBlock({ routes: [tr.route] })}</div>`;
+        <div class="card">${mapBlock({ routes: [tr.route] })}<a class="btn soft block" style="margin-top:12px" href="${esc(fullRouteUrl(tr.route, tr.next))}" target="_blank" rel="noopener">${esc(t('fullRoute'))}</a></div>`;
     } else {
-      h += `<div class="card" style="text-align:center"><div style="font-size:2.2rem">🎓</div><h2>${esc(t('tripDone'))}</h2><p class="muted num">${esc(t('tripDoneAt', { t: clockStr(tr.endedAt) }))}</p><p class="small" style="margin:8px 0 14px">${esc(t('paxSummary', c))}</p><button class="btn ghost" data-act="reset-trip" data-trip="${tr.id}">${esc(t('resetTrip'))}</button></div>`;
+      h += `<div class="card" style="text-align:center"><div style="font-size:2.2rem">🎓</div><h2>${esc(t('tripDone'))}</h2><p class="muted num">${esc(t('tripDoneAt', { t: clockStr(tr.endedAt) }))}</p><p class="num" style="font-weight:700;margin-top:6px">⏱ ${esc(t('totalDuration', { d: durStr(tr.elapsed) }))}</p><p class="small" style="margin:8px 0 14px">${esc(t('paxSummary', c))}</p><button class="btn ghost" data-act="reset-trip" data-trip="${tr.id}">${esc(t('resetTrip'))}</button></div>`;
     }
     h += `<div class="card"><div class="card-h"><h3>${esc(t('stops'))}</h3><label class="row small"><span class="muted">${esc(t('autoSim'))}</span><span class="switch green"><input type="checkbox" data-input="auto" ${S.auto ? 'checked' : ''}><span></span></span></label></div>
       <p class="small muted" style="margin:-6px 0 12px">${esc(t('autoHint'))}</p>
       <ol class="timeline">${r.stops.map((s, i) => {
         const cls = tr.status === 'completed' || (tr.status === 'active' && i < tr.next) ? 'done' : tr.status === 'active' && i === tr.next ? 'now' : '';
-        return `<li class="${cls}"><span class="dot"></span><div class="row between"><b>${esc(L(s))}</b><span class="small muted">${esc(t('studentsN', { n: studentsAt(tr.route, i).filter(isRider).length }))}</span></div></li>`;
+        const ad = lang === 'ar' ? stopAddr(tr.route, i) : stopAddr(tr.route, i, 'en');
+        return `<li class="${cls}"><span class="dot"></span><div class="row between"><div><b>${esc(L(s))}</b><div class="small muted">${esc(ad)} · ${esc(t('studentsN', { n: studentsAt(tr.route, i).filter(isRider).length }))}</div></div>
+          <a class="btn ghost sm" href="${esc(gmaps(stopAddr(tr.route, i)))}" target="_blank" rel="noopener" aria-label="${esc(t('navTo', { p: ad }))}">🧭</a></div></li>`;
       }).join('')}<li class="${tr.status === 'completed' ? 'done' : tr.status === 'active' && tr.next >= r.stops.length ? 'now' : ''}"><span class="dot"></span><b>${esc(t('campus'))}</b></li></ol></div>`;
     return h;
   };
@@ -943,7 +991,13 @@
     const el = e.target.closest('[data-act]'); if (!el || el.disabled) return;
     const id = el.dataset.id;
     switch (el.dataset.act) {
-      case 'role': UI.role = el.dataset.role; store.set('wasel-role', UI.role); render(); window.scrollTo({ top: 0 }); break;
+      case 'role': UI.role = el.dataset.role; store.set('wasel-role', UI.role); setHash(); render(); window.scrollTo({ top: 0 }); break;
+      case 'copy-driver': {
+        const url = location.href.split('#')[0] + '#driver';
+        const ok = () => toast(t('copied'));
+        try { navigator.clipboard.writeText(url).then(ok, () => toast(url)); } catch (err) { toast(url); }
+        break;
+      }
       case 'lang': lang = lang === 'ar' ? 'en' : 'ar'; store.set('wasel-lang', lang); render(); break;
       case 'atab': UI.adminTab = el.dataset.tab; render(); window.scrollTo({ top: 0 }); break;
       case 'start-all': Object.keys(ROUTES).forEach((rid) => { const tr = liveTrip(rid); if (tr && tr.status === 'scheduled' && busOfRoute(rid)) startTrip(tr); }); render(); break;
@@ -1067,6 +1121,12 @@
       notify(sub.sid, 'nPaid', { v: money(amount) });
       toast(t('payRecorded', { v: money(amount) })); return true;
     },
+    loc(fd) {
+      const city = String(fd.get('city') || '').trim(); const campus = String(fd.get('campus') || '').trim();
+      if (city) S.settings.city = { ar: city, en: city === 'بريدة' ? 'Buraydah' : city };
+      if (campus) S.settings.campus = { ar: campus, en: campus === 'جامعة القصيم' ? 'Qassim University' : campus };
+      toast(t('saved')); return true;
+    },
     sub(fd) {
       const sid = String(fd.get('sid')); const month = String(fd.get('month'));
       if (subOf(sid, month)) { toast(t('subExists')); return false; }
@@ -1096,6 +1156,9 @@
   window.addEventListener('storage', (e) => { if (e.key === STATE_KEY && e.newValue) { try { S = JSON.parse(e.newValue); render(); } catch (err) { /* ignore */ } } });
   setInterval(() => { if (S.day !== today0()) { S = initialState(); render(); } }, 60000);
 
+  function setHash() { try { history.replaceState(null, '', '#' + ROLE_HASH[UI.role]); } catch (e) { location.hash = ROLE_HASH[UI.role]; } }
+  window.addEventListener('hashchange', () => { const r = roleFromHash(); if (r && r !== UI.role) { UI.role = r; render(); } });
+  setHash();
   render();
   setInterval(tick, TICK);
   window.Wasel = { get state() { return S; }, ui: UI };
