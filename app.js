@@ -919,7 +919,12 @@
   function closeModal() { const m = $('#modal'); m.hidden = true; m.innerHTML = ''; }
   let toastTimer;
   function toast(msg) { const el = $('#toast'); el.textContent = msg; el.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 2600); }
-  const confirmDel = () => window.confirm(t('confirmDel'));
+  // in-app confirm dialog (browser confirm() is blocked in some embedded viewers)
+  let pendingConfirm = null;
+  function askConfirm(msg, fn, yesLabel = t('del')) {
+    pendingConfirm = fn;
+    openModal(`<p style="font-weight:700;font-size:1.05rem;margin-bottom:16px">${esc(msg)}</p><div class="row"><button class="btn bad grow" data-act="confirm-yes">${esc(yesLabel)}</button><button class="btn ghost" data-act="close">${esc(t('cancel'))}</button></div>`);
+  }
 
   // ================= actions =================
   function setAbsent(sid, on) {
@@ -944,18 +949,19 @@
       case 'start-all': Object.keys(ROUTES).forEach((rid) => { const tr = liveTrip(rid); if (tr && tr.status === 'scheduled' && busOfRoute(rid)) startTrip(tr); }); render(); break;
       case 'start-trip': startTrip(findTrip(el.dataset.trip)); render(); break;
       case 'reset-trip': resetTrip(findTrip(el.dataset.trip)); render(); break;
-      case 'reset': if (window.confirm(t('resetConfirm'))) { S = initialState(); store.set(STATE_KEY, JSON.stringify(S)); toast(t('resetDone')); render(); } break;
+      case 'reset': askConfirm(t('resetConfirm'), () => { S = initialState(); store.set(STATE_KEY, JSON.stringify(S)); toast(t('resetDone')); render(); }, t('resetDemo')); break;
+      case 'confirm-yes': { const fn = pendingConfirm; pendingConfirm = null; closeModal(); if (fn) fn(); break; }
       case 'board': { const st = student(el.dataset.sid); board(liveTrip(st.route), st.id); persist(); updateLive(); break; }
       case 'mark-absent': { const st = student(el.dataset.sid); const tr = liveTrip(st.route); if (tr && tr.pax[st.id] === 'waiting') { tr.pax[st.id] = 'absent'; notify(st.id, 'nAbsent'); } persist(); updateLive(); break; }
       case 'trip-filter': UI.tripFilter = el.dataset.f; updateLive(); break;
       case 'add-trip': tripModal(); break;
       case 'edit-trip': tripModal(id); break;
-      case 'del-trip': { const tr = findTrip(id); if (tr.status === 'active') { toast(t('cantDelActive')); break; } if (confirmDel()) { S.trips = S.trips.filter((x) => x.id !== id); done(t('deleted')); } break; }
+      case 'del-trip': { const tr = findTrip(id); if (tr.status === 'active') { toast(t('cantDelActive')); break; } askConfirm(t('confirmDel'), () => { S.trips = S.trips.filter((x) => x.id !== id); done(t('deleted')); }); break; }
       case 'add-student': studentModal(); break;
       case 'edit-student': studentModal(id); break;
-      case 'del-student': if (confirmDel()) { S.students = S.students.filter((x) => x.id !== id); S.subs = S.subs.filter((x) => x.sid !== id); S.trips.forEach((tr) => { delete tr.pax[id]; }); done(t('deleted')); } break;
+      case 'del-student': askConfirm(t('confirmDel'), () => { S.students = S.students.filter((x) => x.id !== id); S.subs = S.subs.filter((x) => x.sid !== id); S.trips.forEach((tr) => { delete tr.pax[id]; }); done(t('deleted')); }); break;
       case 'add-bus': busModal(); break;
-      case 'del-bus': { const b = bus(id); if (busBusy(b)) { toast(t('busBusy')); break; } if (confirmDel()) { S.buses = S.buses.filter((x) => x.id !== id); done(t('deleted')); } break; }
+      case 'del-bus': { const b = bus(id); if (busBusy(b)) { toast(t('busBusy')); break; } askConfirm(t('confirmDel'), () => { S.buses = S.buses.filter((x) => x.id !== id); done(t('deleted')); }); break; }
       case 'bus-toggle': {
         const b = bus(el.dataset.bus); if (busBusy(b)) { toast(t('busBusy')); break; }
         if (b.status === 'maintenance') b.status = 'standby'; else { b.status = 'maintenance'; b.route = null; }
@@ -966,14 +972,14 @@
       case 'edit-driver': driverModal(id); break;
       case 'del-driver': {
         const b = S.buses.find((x) => x.driver === id); if (b && busBusy(b)) { toast(t('driverBusy')); break; }
-        if (confirmDel()) { S.drivers = S.drivers.filter((x) => x.id !== id); if (b) { b.driver = null; syncBus(b); } done(t('deleted')); }
+        askConfirm(t('confirmDel'), () => { S.drivers = S.drivers.filter((x) => x.id !== id); if (b) { b.driver = null; syncBus(b); } done(t('deleted')); });
         break;
       }
       case 'sub-month': UI.subMonth = el.dataset.m; render(); break;
       case 'add-sub': subModal(); break;
       case 'pay': payModal(id); break;
-      case 'del-sub': if (confirmDel()) { S.subs = S.subs.filter((x) => x.id !== id); done(t('deleted')); } break;
-      case 'del-pay': { const sub = S.subs.find((x) => x.id === id); if (sub && confirmDel()) { sub.payments = sub.payments.filter((p) => p.id !== el.dataset.pay); done(t('deleted')); } break; }
+      case 'del-sub': askConfirm(t('confirmDel'), () => { S.subs = S.subs.filter((x) => x.id !== id); done(t('deleted')); }); break;
+      case 'del-pay': { const sub = S.subs.find((x) => x.id === id); if (sub) askConfirm(t('confirmDel'), () => { sub.payments = sub.payments.filter((p) => p.id !== el.dataset.pay); done(t('deleted')); }); break; }
       case 'close': closeModal(); break;
       case 'read-all': (S.notifs[UI.student] || []).forEach((n) => { n.read = true; }); persist(); updateLive(); break;
       case 'call': toast(t('callDemo')); break;

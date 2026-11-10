@@ -271,3 +271,4 @@ label.field span { display: block; font-size: .85rem; color: var(--muted); margi
   .map .pulse { animation: none; }
 }
 .row.wrap > .grow { flex: 1 1 240px; }
+[hidden] { display: none !important; }
