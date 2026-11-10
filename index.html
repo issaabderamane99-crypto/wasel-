@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>واصل | Wasel — إدارة النقل الجامعي</title>
+  <meta name="description" content="واصل: نموذج تجريبي لإدارة النقل الجامعي للطالبات — الأسطول والسائقون والرحلات والاشتراكات، مع واجهات للإدارة والسائق والطالبة. بيانات تجريبية، دون GPS أو دفع حقيقي.">
+  <meta name="theme-color" content="#1f3d4a">
+  <meta property="og:title" content="واصل | Wasel — University transport management">
+  <meta property="og:description" content="Interactive demo with admin, driver and student views, live bus simulation, trips and subscriptions. Sample data only.">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="og-image.png">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Wasel">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <svg class="logo" viewBox="0 0 48 48" aria-hidden="true">
+        <rect width="48" height="48" rx="12" fill="#1f3d4a"/>
+        <rect x="10" y="12" width="28" height="20" rx="5" fill="#fff"/>
+        <rect x="13" y="15" width="10" height="7" rx="2" fill="#1f3d4a"/>
+        <rect x="25" y="15" width="10" height="7" rx="2" fill="#1f3d4a"/>
+        <circle cx="16" cy="34" r="3.5" fill="#e39a3e"/>
+        <circle cx="32" cy="34" r="3.5" fill="#e39a3e"/>
+      </svg>
+      <div>
+        <b data-t="appName">واصل</b>
+        <small data-t="tagline">نقل جامعي للطالبات</small>
+      </div>
+    </div>
+    <div class="top-actions">
+      <button id="installBtn" class="btn ghost sm" hidden data-act="install" data-t="install">تثبيت</button>
+      <button id="langBtn" class="btn ghost sm" data-act="lang" aria-label="Language">English</button>
+    </div>
+  </header>
+  <div class="demo-banner" data-t="demoBanner">نسخة تجريبية · بيانات وهمية · بدون GPS أو دفع حقيقي</div>
+  <nav class="roles" role="tablist">
+    <button data-act="role" data-role="admin" role="tab" data-t="roleAdmin">المالك</button>
+    <button data-act="role" data-role="driver" role="tab" data-t="roleDriver">السائق</button>
+    <button data-act="role" data-role="student" role="tab" data-t="roleStudent">الطالبة</button>
+  </nav>
+  <main id="view" tabindex="-1"></main>
+  <div id="modal" class="modal" hidden></div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="app.js"></script>
+</body>
+</html>
